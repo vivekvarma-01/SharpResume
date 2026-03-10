@@ -1,6 +1,6 @@
-# **AWS Deployment Steps – Creorez Backend (Node.js + Docker + Nginx + CloudWatch)**
+# **AWS Deployment Steps – Creorez Backend (Node.js + Docker + Nginx + GitHub Actions)**
 
-This document provides the full sequence of actions used to deploy the Creorez backend on an AWS EC2 instance. It includes instance setup, environment configuration, Docker containerization, reverse proxy configuration, and monitoring setup.
+This document provides the full sequence of actions used to deploy the Creorez backend on an AWS EC2 instance. It includes instance setup, environment configuration, Docker containerization, reverse proxy configuration, CI/CD pipeline, and monitoring setup.
 
 ---
 
@@ -293,7 +293,105 @@ sudo systemctl restart nginx
 
 ---
 
-## ✅ **9. CloudWatch Monitoring**
+## ✅ **9. GitHub Actions CI/CD Pipeline**
+
+Every push to `main` inside `resume-backend/` automatically builds, pushes, and deploys — zero manual intervention.
+
+### **Pipeline Flow:**
+```
+Push to main (resume-backend/ changes)
+    ↓
+GitHub Actions triggered
+    ↓
+Checkout code
+    ↓
+Login to DockerHub
+    ↓
+Build Docker image
+    ↓
+Push to DockerHub
+    ↓
+SSH into EC2
+    ↓
+Pull new image → Remove old container → Run new container
+    ↓
+Zero manual intervention ✅
+```
+
+### **Workflow file location:**
+```
+.github/workflows/deploy.yml
+```
+
+### **Workflow file:**
+```yaml
+name: Deploy to EC2
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'resume-backend/**'
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKER_USERNAME }}
+          password: ${{ secrets.DOCKER_PASSWORD }}
+
+      - name: Build Docker image
+        run: |
+          cd resume-backend
+          docker build -t ${{ secrets.DOCKER_USERNAME }}/pdf-server:latest .
+
+      - name: Push to DockerHub
+        run: |
+          docker push ${{ secrets.DOCKER_USERNAME }}/pdf-server:latest
+
+      - name: Deploy to EC2
+        uses: appleboy/ssh-action@v1.0.0
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}
+          script: |
+            docker pull sriharshareddy6464/pdf-server:latest
+            docker rm -f pdf-server || true
+            docker run -d \
+              --name pdf-server \
+              --restart always \
+              -p 3001:3001 \
+              sriharshareddy6464/pdf-server:latest
+            docker ps
+```
+
+### **GitHub Secrets required:**
+
+| Secret | Description |
+|--------|-------------|
+| `DOCKER_USERNAME` | DockerHub username |
+| `DOCKER_PASSWORD` | DockerHub password |
+| `EC2_HOST` | Elastic IP address |
+| `EC2_SSH_KEY` | Contents of `.pem` key file |
+
+> ⚠️ Never commit secrets to Git. Always use GitHub Secrets.
+
+---
+
+## ✅ **10. CloudWatch Monitoring (Optional)**
+
+> 💡 Disabled in alpha stage to reduce costs (~$10-15/month savings).
+> Re-enable in production when needed.
 
 ### Install CloudWatch Agent:
 ```bash
@@ -339,9 +437,10 @@ sudo /opt/aws/amazon-cloudwatch-agent/bin/amazon-cloudwatch-agent-ctl \
   -s
 ```
 
-### Verify:
+### Re-enable when needed:
 ```bash
-sudo systemctl status amazon-cloudwatch-agent
+sudo systemctl enable amazon-cloudwatch-agent
+sudo systemctl start amazon-cloudwatch-agent
 ```
 
 ### CloudWatch Alarms:
@@ -352,22 +451,22 @@ sudo systemctl status amazon-cloudwatch-agent
 | `creorez-memory-alarm` | mem_used_percent | > 75% |
 | `creorez-disk-alarm` | disk_used_percent | > 60% |
 
-> 💡 All alarms notify via SNS → your email.
-
 ---
 
-## ✅ **10. Cost Optimization**
+## ✅ **11. Cost Optimization**
 
 | Service | Cost |
 |---------|------|
 | EC2 t3.micro | ~$7.50/month |
-| CloudWatch metrics (hourly) | ~$1-2/month |
 | Elastic IP (attached) | Free |
-| **Total** | **~$9-10/month** |
+| gp3 Storage 32GB | ~$2.56/month |
+| CloudWatch (disabled) | $0 |
+| GitHub Actions | Free (public repo) |
+| **Total** | **~$10/month** |
 
 ---
 
-## ✅ **11. API Endpoints**
+## ✅ **12. API Endpoints**
 
 | Endpoint | Method | Description |
 |----------|--------|-------------|
@@ -384,7 +483,7 @@ Returns: PDF file directly.
 
 ---
 
-## ✅ **12. Disaster Recovery**
+## ✅ **13. Disaster Recovery**
 
 If EC2 is lost or terminated:
 ```bash
@@ -405,7 +504,7 @@ docker run -d --name pdf-server --restart always -p 3001:3001 sriharshareddy6464
 
 ---
 
-## ✅ **13. Summary**
+## ✅ **14. Summary**
 
 | Step | What | Why |
 |------|------|-----|
@@ -416,7 +515,8 @@ docker run -d --name pdf-server --restart always -p 3001:3001 sriharshareddy6464
 | Docker | Containerization | Portable, reproducible |
 | DockerHub | Image backup | Restore in 2 mins anywhere |
 | Nginx | Reverse proxy | Clean URL on port 80 |
-| CloudWatch | Monitoring | Memory, Disk, CPU alerts |
+| GitHub Actions | CI/CD pipeline | Zero manual deployments |
+| CloudWatch | Monitoring (optional) | Re-enable in production |
 
 ---
 
@@ -427,4 +527,4 @@ docker run -d --name pdf-server --restart always -p 3001:3001 sriharshareddy6464
 - [ ] Terraform (IaC)
 - [ ] EKS + Kubernetes
 - [ ] Prometheus + Grafana
-- [ ] CI/CD pipeline (GitHub Actions)
+- [ ] Staging environment

@@ -2,7 +2,7 @@
 
 Smart resume creation with AI, LaTeX → PDF generation, and ATS scoring.
 
-Built with **Next.js**, deployed on **Vercel**, and powered by a **Node.js backend** running on **AWS EC2** with **Docker + Nginx** for production stability.
+Built with **Next.js**, deployed on **Vercel**, and powered by a **Node.js backend** running on **AWS EC2** with **Docker + Nginx + GitHub Actions** for production stability.
 
 ---
 
@@ -40,6 +40,23 @@ Node.js 22 + Tectonic (LaTeX → PDF)
 PDF Response → Frontend → User
 ```
 
+### **CI/CD Pipeline**
+```
+Push to main (resume-backend/)
+    ↓
+GitHub Actions triggered
+    ↓
+Build Docker image
+    ↓
+Push to DockerHub
+    ↓
+SSH into EC2
+    ↓
+Pull new image → Restart container
+    ↓
+Zero downtime deployment ✅
+```
+
 ---
 
 ## 🔧 Tech Stack
@@ -61,8 +78,8 @@ PDF Response → Frontend → User
 - AWS EC2 (t3.micro, Ubuntu 24.04, 32GB gp3)
 - Elastic IP (static)
 - Docker + DockerHub
-- CloudWatch (memory, disk, CPU monitoring)
-- IAM Role (CloudWatch permissions)
+- GitHub Actions (CI/CD pipeline)
+- IAM Role (scoped permissions)
 - GitHub / Git
 
 ---
@@ -76,8 +93,7 @@ PDF Response → Frontend → User
 - Containerized backend using Docker
 - Pushed image to DockerHub for disaster recovery
 - Configured Nginx as reverse proxy
-- Set up CloudWatch Agent for memory and disk monitoring
-- Configured CloudWatch Alarms with SNS email alerts
+- Set up GitHub Actions CI/CD pipeline (auto build + deploy)
 - Set up AWS Security Groups and firewall rules
 - Connected Vercel frontend ↔ EC2 backend
 - Designed complete DevOps documentation suite
@@ -145,10 +161,14 @@ PORT=3001
 ### Frontend
 Deployed via GitHub → Vercel integration (auto-deploy on push)
 
-### Backend
-Dockerized and deployed on AWS EC2:
+### Backend — Automated via GitHub Actions
+Every push to `main` inside `resume-backend/` triggers:
+1. Docker image build
+2. Push to DockerHub
+3. Auto deploy to EC2
+
+**Manual restore from DockerHub:**
 ```bash
-# Pull from DockerHub and run
 docker pull sriharshareddy6464/pdf-server:latest
 docker run -d --name pdf-server --restart always -p 3001:3001 sriharshareddy6464/pdf-server:latest
 ```
@@ -170,7 +190,7 @@ Full steps: [`devops/doc/deployment.md`](devops/doc/deployment.md)
   "code": "your latex code here"
 }
 ```
-**Response:** PDF file
+**Response:** PDF file directly.
 
 ---
 
@@ -181,7 +201,7 @@ Full steps: [`devops/doc/deployment.md`](devops/doc/deployment.md)
 - [ ] Terraform (Infrastructure as Code)
 - [ ] EKS + Kubernetes
 - [ ] Prometheus + Grafana
-- [ ] GitHub Actions CI/CD pipeline
+- [ ] Staging environment
 
 ---
 
@@ -200,7 +220,7 @@ Cloud & DevOps Engineer
 - Real-world AWS cloud deployment
 - Docker containerization and DockerHub backup
 - Nginx reverse proxy configuration
-- CloudWatch monitoring and alerting
+- GitHub Actions CI/CD pipeline (zero manual deployments)
 - Production-grade disaster recovery
 - Complete DevOps documentation
 - Full infrastructure setup from a mobile device
